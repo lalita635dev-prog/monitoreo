@@ -54,7 +54,7 @@
             <p id="login-error" class="text-danger text-center text-sm mt-3 hidden">Usuario o contraseña incorrectos.</p>
         </div>
         <p class="text-xs text-gray-500 text-center mt-6">
-            Pruebe: **admin/admin**, **user1/123**, **user2/123**
+            Para agregar usuarios contacte al desarrollador.
         </p>
     </div>
 
@@ -283,7 +283,7 @@
                 img.alt = `Feed de la cámara ${config.name}`;
                 img.onerror = () => {
                     // Mensaje de error si la cámara no se carga o no tiene señal
-                    img.src = `https://placehold.co/640x360/374151/d1d5db?text=Sin+Camara+Asignada`;
+                    img.src = `https://placehold.co/640x360/374151/d1d5db?text=Sin+camara`;
                     console.error(`Error al cargar el feed de la cámara ${config.id}: ${config.name}`);
                 };
                 feedContainer.appendChild(img);
