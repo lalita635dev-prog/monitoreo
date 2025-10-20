@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vigilancia Villa Arcadia</title>
+    <!-- Carga de Tailwind CSS para un diseño responsive y moderno -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Estilos personalizados para el feed de la cámara */
+        .camera-feed {
+            width: 100%;
+            aspect-ratio: 16 / 9; /* Relación de aspecto común de vídeo */
+            background-color: #1f2937; /* Fondo oscuro */
+            border: 2px solid #4b5563;
+            object-fit: cover;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'secondary': '#10b981',
+                        'danger': '#ef4444',
+                        'admin': '#f59e0b'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-900 text-white font-sans min-h-screen p-4 sm:p-8 flex items-center justify-center">
+
+    <!-- 1. VISTA DE LOGIN -->
+    <div id="login-view" class="w-full max-w-md bg-gray-800 p-8 rounded-xl shadow-2xl transition-all duration-500">
+        <h2 class="text-3xl font-bold text-center text-primary mb-6">Monitoreo 🛡️</h2>
+        <div class="space-y-4">
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-400">Usuario</label>
+                <input type="text" id="username" class="mt-1 block w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-primary focus:border-primary text-white" placeholder="admin, user1, user2, o Lau">
+            </div>
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-400">Contraseña</label>
+                <input type="password" id="password" class="mt-1 block w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:ring-primary focus:border-primary text-white" placeholder="Contraseña">
+            </div>
+            <button id="login-button" class="w-full py-3 bg-primary hover:bg-indigo-600 transition duration-150 rounded-lg font-bold shadow-md" onclick="handleLogin()">
+                Ingresar 🔐
+            </button>
+            <p id="login-error" class="text-danger text-center text-sm mt-3 hidden">Usuario o contraseña incorrectos.</p>
+        </div>
+        <p class="text-xs text-gray-500 text-center mt-6">
+            Pruebe: **admin/admin**, **user1/123**, **user2/123**
+        </p>
+    </div>
+
+    <!-- 2. VISTA DEL DASHBOARD (Inicialmente oculta) -->
+    <div id="dashboard-view" class="w-full max-w-7xl mx-auto hidden flex flex-col items-center">
+        <header class="text-center mb-8 w-full">
+            <h1 class="text-4xl font-extrabold text-primary mb-2">Panel de Vigilancia 🛡️</h1>
+            <p class="text-gray-400">Monitoreo en tiempo real de tus dispositivos. <span id="welcome-user" class="font-bold text-secondary"></span></p>
+            
+            <!-- Contenedor para la vista de administrador -->
+            <div id="admin-tools" class="mt-4 p-4 bg-gray-800 rounded-xl hidden">
+                <h2 class="text-2xl font-bold text-admin mb-3 flex justify-center items-center">
+                    🛠️ Herramientas de Administración
+                </h2>
+                
+                <!-- Botón Desplegable para Permisos de Usuarios -->
+                <button id="toggle-users-btn" onclick="toggleUserList()" class="w-full flex justify-between items-center px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-bold text-white transition duration-150">
+                    <span>Ver/Ocultar Permisos de Usuarios</span>
+                    <span id="toggle-icon">▼</span>
+                </button>
+
+                <!-- Contenido Desplegable (Inicialmente oculto) -->
+                <div id="user-list-container" class="mt-2 p-3 bg-gray-700 rounded-lg hidden">
+                    <p class="font-semibold text-white mb-2">Permisos de Usuario Cargados:</p>
+                    <div id="user-list" class="space-y-2 text-left">
+                        <!-- Lista de usuarios y sus permisos -->
+                    </div>
+                </div>
+
+                <!-- Botón de gestión de ejemplo (No funcional sin base de datos) -->
+                <button onclick="alert('Podra gestionar los usuarios editando el JSON externo.')" 
+                    class="mt-4 w-full px-4 py-2 bg-admin hover:bg-yellow-600 transition duration-150 rounded-lg font-bold text-gray-900">
+                    Gestionar Usuarios
+                </button>
+            </div>
+        </header>
+
+        <main class="w-full">
+            <div id="camera-grid" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Feeds de las cámaras -->
+            </div>
+        </main>
+
+        <div id="status-message" class="fixed bottom-0 right-0 m-4 p-3 bg-gray-800 text-sm text-green-400 rounded-lg shadow-xl hidden">
+            Conectado y monitoreando...
+        </div>
+    </div>
+
+
+    <script>
+        // --- CONFIGURACIÓN ---
+        // URL donde se cargará el JSON de usuarios. 
+        // ¡ADVERTENCIA! Si lo ejecutas localmente (file:///) DEBES usar Live Server o un servidor web.
+        // Si usas el mismo servidor que aloja esta página, usa una URL relativa, ej: 'user_permissions.json'
+        const USER_DATA_URL = 'user_permissions.json';
+        
+        let USER_DATA = []; // Los datos de usuario se cargan aquí
+        let ALL_CAMERAS = []; // Las cámaras también se moverán al JSON, por ahora las mantenemos aquí:
+        
+        ALL_CAMERAS = [
+            { id: 1, name: 'Cámara Cochera', ip: 'https://placehold.co/640x360/1a1a1a/cccccc?text=Sin cámara asignada' },
+            { id: 2, name: 'Cámara Fondo', ip: 'https://placehold.co/640x360/1a1a1a/cccccc?text=Sin cámara asignada' },
+            { id: 3, name: 'Cámara Casa', ip: 'http://192.168.100.78:8080/video' },
+            { id: 4, name: 'Cámara Pasillo', ip: 'https://placehold.co/640x360/1a1a1a/cccccc?text=Sin cámara asignada' }
+        ];
+
+        let currentUser = null; // Almacena el objeto del usuario logueado
+
+        // --- FUNCIÓN DE CARGA DE JSON EXTERNO ---
+        async function loadUserData() {
+            try {
+                // Intenta cargar el JSON de la URL
+                const response = await fetch(USER_DATA_URL);
+                if (!response.ok) {
+                    throw new Error(`Error al cargar ${USER_DATA_URL}: ${response.statusText}`);
+                }
+                USER_DATA = await response.json();
+                console.log('Datos de usuario cargados correctamente:', USER_DATA);
+            } catch (error) {
+                // Si falla la carga (típico en entornos locales sin servidor), usamos datos de respaldo.
+                console.error('Fallo al cargar JSON externo. Usando datos de respaldo.', error);
+                
+                // --- CONFIGURACIÓN DE RESPALDO (JSON LOCAL) ---
+                USER_DATA = [
+                    { username: 'Admin', password: '123_Admin', role: 'admin', allowedCameras: ALL_CAMERAS.map(c => c.id) },
+                    { username: 'Lau', password: 'Lau', role: 'user', allowedCameras: [1, 2, 3] },
+                    { username: 'Sabri', password: 'Sabri', role: 'user', allowedCameras: [1, 2] },
+                    { username: 'user5', password: '12345', role: 'user', allowedCameras: [2, 3] }
+                ];
+            }
+        }
+
+        // --- FUNCIONES DE AUTENTICACIÓN (Ahora espera la carga de datos) ---
+        async function handleLogin() {
+            // Asegurarse de que los datos estén cargados antes de intentar el login
+            if (USER_DATA.length === 0) {
+                 // Esta llamada es importante para garantizar que USER_DATA tenga contenido
+                await loadUserData(); 
+            }
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorMessage = document.getElementById('login-error');
+            
+            const userFound = USER_DATA.find(user => user.username === username && user.password === password);
+
+            if (userFound) {
+                currentUser = userFound; // Guardar el usuario logueado
+                
+                // Login exitoso
+                errorMessage.classList.add('hidden');
+                document.getElementById('login-view').classList.add('hidden');
+                document.getElementById('dashboard-view').classList.remove('hidden');
+                
+                // Iniciar la carga del dashboard
+                initializeDashboard();
+            } else {
+                // Login fallido
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        // --- FUNCIÓN DESPLEGABLE (Accordion) ---
+        function toggleUserList() {
+            const container = document.getElementById('user-list-container');
+            const icon = document.getElementById('toggle-icon');
+            
+            if (container.classList.contains('hidden')) {
+                // Mostrar
+                container.classList.remove('hidden');
+                icon.textContent = '▲';
+            } else {
+                // Ocultar
+                container.classList.add('hidden');
+                icon.textContent = '▼';
+            }
+        }
+
+        // --- FUNCIONES DE ADMINISTRACIÓN ---
+
+        function initializeAdminTools() {
+            const adminToolsEl = document.getElementById('admin-tools');
+            const userListEl = document.getElementById('user-list');
+            adminToolsEl.classList.remove('hidden');
+
+            userListEl.innerHTML = ''; // Limpiar lista
+            
+            // Recorre los datos de usuario cargados (ya sea por fetch o de respaldo)
+            USER_DATA.forEach(user => {
+                const userDiv = document.createElement('div');
+                userDiv.className = 'text-sm text-gray-300 border-b border-gray-600 pb-1 pt-1';
+                
+                // Mapear IDs de cámara a nombres para que sea más legible
+                const cameraNames = user.allowedCameras.map(id => {
+                    const camera = ALL_CAMERAS.find(c => c.id === id);
+                    return camera ? camera.name : 'ID Desconocido';
+                });
+
+                userDiv.innerHTML = `<span class="font-bold text-white">${user.username}</span> (${user.role}): <br> Cámaras asignadas: <span class="text-secondary">${cameraNames.join(', ')}</span>`;
+                userListEl.appendChild(userDiv);
+            });
+        }
+
+        // --- FUNCIONES DEL DASHBOARD ---
+
+        /**
+         * Redirige al visualizador de pantalla completa, pasando la URL del video y el nombre de la cámara como parámetros.
+         * @param {string} url La URL del stream MJPEG de la cámara.
+         * @param {string} name El nombre de la cámara.
+         */
+        function viewFullScreen(url, name) {
+            // Codificar los parámetros para la URL
+            const encodedUrl = encodeURIComponent(url);
+            const encodedName = encodeURIComponent(name);
+
+            // Redirigir a la nueva página fullscreen_viewer.html
+            // Utilizamos 'fullscreen_viewer.html' que subiste en el ZIP
+            window.open(`fullscreen_viewer.html?videoUrl=${encodedUrl}&cameraName=${encodedName}`, '_blank');
+        }
+
+
+        /**
+         * Inicializa y muestra solo las cámaras permitidas para el usuario actual.
+         */
+        function initializeDashboard() {
+            const grid = document.getElementById('camera-grid');
+            grid.innerHTML = ''; // Limpiar por si se llama varias veces
+            
+            document.getElementById('welcome-user').textContent = `(Usuario: ${currentUser.username})`;
+
+            // 1. FILTRAR CÁMARAS
+            const allowedCameraIds = currentUser.allowedCameras;
+            const filteredCameras = ALL_CAMERAS.filter(camera => 
+                allowedCameraIds.includes(camera.id)
+            );
+
+            // 2. MOSTRAR HERRAMIENTAS DE ADMINISTRACIÓN SI ES ADMIN
+            if (currentUser.role === 'admin') {
+                document.getElementById('admin-tools').classList.remove('hidden');
+                initializeAdminTools();
+            } else {
+                document.getElementById('admin-tools').classList.add('hidden');
+            }
+
+            // 3. GENERAR TARJETAS DE CÁMARA
+            filteredCameras.forEach(config => {
+                const card = document.createElement('div');
+                card.id = `card-${config.id}`;
+                card.className = 'bg-gray-800 p-4 rounded-xl shadow-lg transition-all duration-300';
+                
+                // Título de la cámara
+                const title = document.createElement('h2');
+                title.className = 'text-xl font-semibold mb-3 text-white';
+                title.textContent = config.name;
+                card.appendChild(title);
+
+                // Contenedor del feed
+                const feedContainer = document.createElement('div');
+                feedContainer.className = 'relative rounded-lg overflow-hidden';
+
+                // Elemento IMG para mostrar el stream MJPEG
+                const img = document.createElement('img');
+                img.id = `feed-${config.id}`;
+                img.src = config.ip;
+                img.className = 'camera-feed rounded-lg transition-all duration-300';
+                img.alt = `Feed de la cámara ${config.name}`;
+                img.onerror = () => {
+                    // Mensaje de error si la cámara no se carga o no tiene señal
+                    img.src = `https://placehold.co/640x360/374151/d1d5db?text=Sin+Camara+Asignada`;
+                    console.error(`Error al cargar el feed de la cámara ${config.id}: ${config.name}`);
+                };
+                feedContainer.appendChild(img);
+                
+                card.appendChild(feedContainer);
+                
+                // BOTÓN DE PANTALLA COMPLETA
+                const fullScreenButton = document.createElement('button');
+                fullScreenButton.textContent = 'Pantalla Completa ↗️';
+                fullScreenButton.className = 'mt-3 w-full py-2 bg-secondary hover:bg-green-600 transition duration-150 rounded-lg font-bold shadow-md';
+                
+                // IMPORTANTE: Pasamos la URL y el nombre a la función viewFullScreen
+                fullScreenButton.onclick = () => viewFullScreen(config.ip, config.name);
+
+                card.appendChild(fullScreenButton);
+
+                grid.appendChild(card);
+            });
+
+            document.getElementById('status-message').classList.remove('hidden');
+        }
+
+        // Manejar el inicio de sesión con Enter
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !document.getElementById('dashboard-view').classList.contains('hidden')) {
+                // Si ya estamos en el dashboard, no hacer nada.
+                return;
+            }
+            if (e.key === 'Enter') {
+                handleLogin();
+            }
+        });
+
+        // Asegurarse de que al cargar la página estemos en la vista de login.
+        document.getElementById('dashboard-view').classList.add('hidden');
+        document.getElementById('login-view').classList.remove('hidden');
+
+    </script>
+</body>
+</html>
